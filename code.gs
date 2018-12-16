@@ -1,3 +1,5 @@
+Logger = BetterLog.useSpreadsheet('1WkVozJVnLzQWaPzp-Owq2VzLdTKjkVBMqmozaCesaxQ');
+
 function onInstall(e) {
   onOpen(e);
 }
@@ -5,7 +7,7 @@ function onInstall(e) {
 function onOpen(e) {
   /*****************************************************************************************************************
   *
-  * 
+  *
   *
   *****************************************************************************************************************/
   var ui = SpreadsheetApp.getUi();
@@ -13,7 +15,7 @@ function onOpen(e) {
       .addItem("Manually Run Reports", "triggerGenerateReports")
       .addSeparator()
       .addItem("Enable Weekly Reporting", "menuItem2")
-      .addItem("Disable Weekly Reporting", "menuItem3") 
+      .addItem("Disable Weekly Reporting", "menuItem3")
       .addToUi();
 }
 
@@ -36,12 +38,12 @@ function menuItem2() {
     }
     ScriptApp.newTrigger('triggerGenerateReports')
     .timeBased()
-    .everyMinutes(1)
-    //.onWeekDay(ScriptApp.WeekDay.MONDAY)
-    //.atHour(1)
-    //.inTimezone("America/Chicago")
+    //.everyMinutes(1)
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(1)
+    .inTimezone("America/Chicago")
     .create();
-  
+
     ui.alert('Weekly reporting has been enabled.  Reports are sent every Monday at 1:00 am CT.');
   } else {
     // User clicked "No" or X in the title bar.
@@ -74,22 +76,22 @@ function menuItem3() {
 function triggerGenerateReports() {
   Logger.log("##################### S T A R T Running triggerGenerateReports() #####################");
   var myActiveSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   myActiveSpreadsheet.toast('Loading settings', 'Status');
   var settings = getSettings();
-  
+
   myActiveSpreadsheet.toast('Loading data from Masters', 'Status');
   var objectRowsData = getAllDataFromMasters(settings);
 
   myActiveSpreadsheet.toast('Sorting data for reports', 'Status');
   var sortedKeysFromObjectRowsData = sortKeysFromObjectRowsData(Object.keys(objectRowsData), settings);
-  
+
   myActiveSpreadsheet.toast('Filtering data for reports', 'Status');
   var filteredCarrierReportRowsData = filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, "Carrier");
   var filteredVendorReportRowsData = filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, "Vendor");
   var filteredCustomerReportRowsData = filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, "Customer");
   var filteredWeightOrDateReportRowsData = filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, "WeightOrDate");
-  
+
   myActiveSpreadsheet.toast('Creating reports', 'Status');
   var dataTableForCarrierEmail = createReport(filteredCarrierReportRowsData, sortedKeysFromObjectRowsData, "Carrier");
   var dataTableForVendorEmail = createReport(filteredVendorReportRowsData, sortedKeysFromObjectRowsData, "Vendor");
@@ -101,7 +103,7 @@ function triggerGenerateReports() {
   sendEmailReport(dataTableForVendorEmail, settings, "Vendor");
   sendEmailReport(dataTableForCustomerEmail, settings, "Customer");
   sendEmailReport(dataTableForWeightOrDateEmail, settings, "WeightOrDate");
-  
+
   Logger.log("That's the end of the show, folks!");
 }
 
@@ -109,43 +111,43 @@ function getSettings() {
   Logger.log("**** Running getSettings() ****");
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName("Settings");
-  
+
   if (sheet == null) {        // if Settings sheet does not exist in destination
       throw 'Error:  The Settings sheet could not be found';
-  } 
+  }
   var data = sheet.getDataRange().getValues();
-  
+
   var ssUrl = ss.getUrl();
-  
+
   var emailsWeightWeeklyReport = data[4][4];
   var emailsCustomerWeeklyReport = data[5][4];
   var emailsCarrierWeeklyReport = data[6][4];
   var emailsVendorWeeklyReport = data[7][4];
 
   var totalNumTraders = data[9][4];
-  
+
   var masterHeaderRowNum = data[30][4];
   var masterDataStartRowNum = data[31][4];
   var masterDataStartColNum = letterToColumn(data[32][4]);
   var masterDataEndColNum = letterToColumn(data[33][4]);
-  
+
   var arrayTraderNames = data[57][4].split(',');
   var arrayMasterUrls = data[58][4].split(',');
-  
+
   return {ssUrl:ssUrl,
-          
+
           emailsWeightWeeklyReport:emailsWeightWeeklyReport,
           emailsCustomerWeeklyReport:emailsCustomerWeeklyReport,
           emailsCarrierWeeklyReport:emailsCarrierWeeklyReport,
           emailsVendorWeeklyReport:emailsVendorWeeklyReport,
 
           totalNumTraders:totalNumTraders,
-          
+
           masterHeaderRowNum:masterHeaderRowNum,
           masterDataStartRowNum:masterDataStartRowNum,
           masterDataStartColNum:masterDataStartColNum,
           masterDataEndColNum:masterDataEndColNum,
-          
+
           arrayTraderNames:arrayTraderNames,
           arrayMasterUrls:arrayMasterUrls};
 }
@@ -154,36 +156,36 @@ function getAllDataFromMasters(settings) {
   Logger.log("**** Running getAllDataFromMasters ****");
   var arrayMasterUrls = settings.arrayMasterUrls;
   var arrayTraderNames = settings.arrayTraderNames;
-  var masterHeaderRowNum = settings.masterHeaderRowNum;  
+  var masterHeaderRowNum = settings.masterHeaderRowNum;
   var masterDataStartRowNum = settings.masterDataStartRowNum;
   var masterDataStartColNum = settings.masterDataStartColNum;
   var masterDataTotalCols = settings.masterDataEndColNum - masterDataStartColNum + 1;
-  
+
   var objectRowsData = {};
-  
+
   // Loop through the master Urls
   for (var i = 0; i < arrayMasterUrls.length; i++) {
     // Get a list of sheets within the current master
     var ss = SpreadsheetApp.openByUrl(arrayMasterUrls[i])
     var sheets = ss.getSheets()
-      .filter(function(x) { 
+      .filter(function(x) {
         return (x.getName() != "Settings" && x.getName() != "Master Template TO DUPLICATE" && x.getName() != "Log");     // filter out Setting/template sheets
       });
-    Logger.log('Sheets = ' + sheets);
+    // Logger.log('Sheets = ' + sheets);
     // Loop through the sheets within each master
     for (var j = 0; j < sheets.length; j++) {
       var sheet = sheets[j];
       // >>>> Eventually will need to look into whether using LastRow is an issue here, vs stripping out blank cells at bottom
       var range = sheet.getRange(masterDataStartRowNum, masterDataStartColNum, sheet.getLastRow(), masterDataTotalCols);
-      
+
       // store row data indexed by column header name, with trader name as the key
       var sheetNameAndTraderName = sheet.getName() + "-" + arrayTraderNames[i];
       objectRowsData[sheetNameAndTraderName] = getRowsData(sheet, range, masterHeaderRowNum);
-      Logger.log("objectRowsData[sheetNameAndTraderName][0] = " + objectRowsData[sheetNameAndTraderName][0]);
-      Logger.log("objectRowsData[sheetNameAndTraderName][0][carrierInvNumber] = " + objectRowsData[sheetNameAndTraderName][0]["carrierInvNumber"]);
+      // Logger.log("objectRowsData[sheetNameAndTraderName][0] = " + objectRowsData[sheetNameAndTraderName][0]);
+      // Logger.log("objectRowsData[sheetNameAndTraderName][0][carrierInvNumber] = " + objectRowsData[sheetNameAndTraderName][0]["carrierInvNumber"]);
     }
   }
-  Logger.log('objectRowsData = ' + objectRowsData);
+  // Logger.log('objectRowsData = ' + objectRowsData);
   return objectRowsData;
 }
 
@@ -194,7 +196,7 @@ function sortKeysFromObjectRowsData(keysFromObjectRowsData, settings) {
   var sortedKeysFromObjectRowsData = [];
   // convert into a numerical, sortable value
   for (var i = 0; i < keysFromObjectRowsData.length; i++) {
-    sheetAndTraderNumber.push(convertSheetNameAndTraderNameToNumber(keysFromObjectRowsData[i], settings));  
+    sheetAndTraderNumber.push(convertSheetNameAndTraderNameToNumber(keysFromObjectRowsData[i], settings));
   }
   // sort the array
   sheetAndTraderNumber.sort(function(a, b){return a-b});
@@ -203,7 +205,7 @@ function sortKeysFromObjectRowsData(keysFromObjectRowsData, settings) {
   for (var i = 0; i < sheetAndTraderNumber.length; i++) {
     sortedKeysFromObjectRowsData.push(convertSheetAndTraderNumberToName(sheetAndTraderNumber[i], settings));
   }
-  Logger.log('sortedKeysFromObjectRowsData = ' + sortedKeysFromObjectRowsData);
+  // Logger.log('sortedKeysFromObjectRowsData = ' + sortedKeysFromObjectRowsData);
   return sortedKeysFromObjectRowsData;
 }
 
@@ -214,7 +216,7 @@ function filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, repo
   switch(reportType) {
     case "Carrier":
       for (var i = 0; i < sortedKeysFromObjectRowsData.length; i++) {
-        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) { 
+        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) {
           if (!x.carrierInvNumber && x.dateLastSynced && x.status != "Canceled") {
             return true
           } else {
@@ -225,7 +227,7 @@ function filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, repo
       break;
     case "Customer":
       for (var i = 0; i < sortedKeysFromObjectRowsData.length; i++) {
-        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) { 
+        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) {
           if (!x.customerInvNumber3ccInvoice && x.dateLastSynced && x.status != "Canceled") {
             return true
           } else {
@@ -236,7 +238,7 @@ function filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, repo
       break;
     case "Vendor":
       for (var i = 0; i < sortedKeysFromObjectRowsData.length; i++) {
-        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) { 
+        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) {
           if (!x.vendorInv && x.dateLastSynced && x.status != "Canceled") {
             return true
           } else {
@@ -247,7 +249,7 @@ function filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, repo
       break;
     case "WeightOrDate":
       for (var i = 0; i < sortedKeysFromObjectRowsData.length; i++) {
-        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) { 
+        filteredObjectRowsData[sortedKeysFromObjectRowsData[i]] = objectRowsData[sortedKeysFromObjectRowsData[i]].filter(function(x) {
           if ((!x.actualDeliveryDate && x.dateLastSynced && x.status != "Canceled") || (!x.finalWeightDestination && !x.finalWeightOrigin && x.dateLastSynced && x.status != "Canceled")) {
             return true
           } else {
@@ -256,9 +258,9 @@ function filterObjectRowsData(objectRowsData, sortedKeysFromObjectRowsData, repo
         });
       }
   }
-  Logger.log("filteredObjectRowsData = " + filteredObjectRowsData);
-  Logger.log("filteredObjectRowsData[sortedKeysFromObjectRowsData[0]] = " + filteredObjectRowsData[sortedKeysFromObjectRowsData[0]]);
-  return filteredObjectRowsData 
+  // Logger.log("filteredObjectRowsData = " + filteredObjectRowsData);
+  // Logger.log("filteredObjectRowsData[sortedKeysFromObjectRowsData[0]] = " + filteredObjectRowsData[sortedKeysFromObjectRowsData[0]]);
+  return filteredObjectRowsData
 }
 
 function createReport(filteredObjectRowsData, sortedKeysFromObjectRowsData, reportType) {
@@ -268,7 +270,7 @@ function createReport(filteredObjectRowsData, sortedKeysFromObjectRowsData, repo
   var totalNumberOfRowsInAllMasterSheets = 0
   var currentMonthString = "";
   var lastMonthString = "";
-  
+
   var carrierTdTag = '</td><td>';
   var customerTdTag = '</td><td>';
   var vendorTdTag = '</td><td>';
@@ -290,14 +292,14 @@ function createReport(filteredObjectRowsData, sortedKeysFromObjectRowsData, repo
 
   // Loop through all months across all masters
   for (var i = 0; i < sortedKeysFromObjectRowsData.length; i++) {
-    var numberOfRowsInMasterSheet = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]].length;   
-    
+    var numberOfRowsInMasterSheet = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]].length;
+
     if (numberOfRowsInMasterSheet === 0) {
       continue;
     }
-    
+
     totalNumberOfRowsInAllMasterSheets += numberOfRowsInMasterSheet;
-        
+
     // loop through the rows in sheet
     for (var j = 0; j < numberOfRowsInMasterSheet; j++) {
       /*
@@ -308,9 +310,9 @@ function createReport(filteredObjectRowsData, sortedKeysFromObjectRowsData, repo
       dataForEmail[j].push(filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["customer"]);
       dataForEmail[j].push(filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["vendor"]);
       dataForEmail[j].push(filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["carrierShipVia"]);*/
-      
+
       currentMonthString = sortedKeysFromObjectRowsData[i].substring(0, sortedKeysFromObjectRowsData[i].indexOf('-'));
-      
+
       if ((lastMonthString != currentMonthString) && (i != sortedKeysFromObjectRowsData.length - 1) && (lastMonthString != "")) {
         dataTableForEmail += '</table><br><table width="600" style="border:1px solid #333"><tr style="border-bottom: solid 1px black"><th style="background-color:#aaaaaa">Date</th><th style="background-color:#aaaaaa">Estimated Ship Date</th><th style="background-color:#aaaaaa">3CC Number</th><th style="background-color:#aaaaaa">Customer</th><th style="background-color:#aaaaaa">Vendor</th><th style="background-color:#aaaaaa">Carrier</th></tr>';
       }
@@ -319,20 +321,20 @@ function createReport(filteredObjectRowsData, sortedKeysFromObjectRowsData, repo
       try { var masterRecordString = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["masterRecord"]; } catch(err) { var masterRecordString = 'Undefined'; }
       try { var customerString = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["customer"]; } catch(err) { var customerString = 'Undefined'; }
       try { var vendorString = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["vendor"]; } catch(err) { var vendorString = 'Undefined'; }
-      try { var carrierString = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["carrierShipVia"]; } catch(err) { var carrierString = 'Undefined'; }  
-      
+      try { var carrierString = filteredObjectRowsData[sortedKeysFromObjectRowsData[i]][j]["carrierShipVia"]; } catch(err) { var carrierString = 'Undefined'; }
+
       if (Utilities.formatDate(new Date(estimatedShipDateString), "EST", "MMM d yyyy") == "Dec 31 1969") {
         estimatedShipDateStringFormatted = estimatedShipDateString;
       } else {
         estimatedShipDateStringFormatted = Utilities.formatDate(new Date(estimatedShipDateString), "EST", "MMM d yyyy");
       }
 
-      dataTableForEmail += '<tr style="border-bottom: solid 1px black"><td>' + currentMonthString + 
-                           '</td><td>' + estimatedShipDateStringFormatted + 
-                           '</td><td style="background-color:#ffffb2">' + masterRecordString + 
-                           customerTdTag + customerString + 
-                           vendorTdTag + vendorString + 
-                           carrierTdTag + carrierString + 
+      dataTableForEmail += '<tr style="border-bottom: solid 1px black"><td>' + currentMonthString +
+                           '</td><td>' + estimatedShipDateStringFormatted +
+                           '</td><td style="background-color:#ffffb2">' + masterRecordString +
+                           customerTdTag + customerString +
+                           vendorTdTag + vendorString +
+                           carrierTdTag + carrierString +
                            '</td></tr>';
       lastMonthString = currentMonthString;
     }
@@ -350,6 +352,7 @@ function sendEmailReport(dataTableForEmail, settings, reportType) {
   var day = d.getDate();
   var year = d.getFullYear();
   var formatedDate = month + "/" + day + "/" + year;
+  var mailBcc = "birnbaum.adam@gmail.com"
 
   switch(reportType) {
     case "Carrier":
@@ -372,21 +375,22 @@ function sendEmailReport(dataTableForEmail, settings, reportType) {
   if (dataTableForEmail == null) {
     var mailBody = '<p>As of ' + formatedDate + ', in the visible sheets there are no loads missing <strong>' + reportTypeString + '</strong>.</p>';
   } else {
-    var mailBody = '<p>As of ' + formatedDate + ', here are the loads missing <strong>' + reportTypeString + '</strong>:</p>'; 
+    var mailBody = '<p>As of ' + formatedDate + ', here are the loads missing <strong>' + reportTypeString + '</strong>:</p>';
     mailBody += '<table width="600" style="border:1px solid #333"><tr style="border-bottom: solid 1px black"><th style="background-color:#aaaaaa">Date</th><th style="background-color:#aaaaaa">Estimated Ship Date</th><th style="background-color:#aaaaaa">3CC Number</th><th style="background-color:#aaaaaa">Customer</th><th style="background-color:#aaaaaa">Vendor</th><th style="background-color:#aaaaaa">Carrier</th></tr>';
     mailBody += dataTableForEmail;
     mailBody += '</table><p>End of Report.</p>';
   }
-  
-  Logger.log('mailTo = ' + mailTo);
-  Logger.log('mailSubject = ' + mailSubject);
-  Logger.log('mailBody = ' + mailBody);
-  
+
+  // Logger.log('mailTo = ' + mailTo);
+  // Logger.log('mailSubject = ' + mailSubject);
+  // Logger.log('mailBody = ' + mailBody);
+
   MailApp.sendEmail({
     to: mailTo,
     subject: mailSubject,
     htmlBody: mailBody,
-    noReply: true
+    noReply: true,
+    bcc: mailBcc
   });
 }
 
@@ -416,7 +420,7 @@ function getMonthName(monthNumber) {
                     09:"October",
                     10:"November",
                     11:"December"};
-  Logger.log('monthNames[monthNumber] = ' + monthNames[monthNumber]);
+  // Logger.log('monthNames[monthNumber] = ' + monthNames[monthNumber]);
   return monthNames[monthNumber];
 }
 
@@ -435,7 +439,7 @@ function getMonthNumber(m) {
                     December:11};
   return monthNames[m];
 }
-  
+
 // ************************* Sheet processing library functions from https://developers.google.com/apps-script/articles/mail_merge#section4 *************
 
 // getRowsData iterates row by row in the input range and returns an array of objects.
@@ -554,37 +558,37 @@ function convertSheetNameAndTraderNameToNumber(sheetNameAndTraderName, settings)
   var sheetMonthNumber = getMonthNumber(sheetName.substring(0, sheetName.indexOf(" ")));
   var sheetYearNumber = Number(sheetName.substring(sheetName.indexOf(" ") + 1));
   var traderNumber = settings.arrayTraderNames.indexOf(traderName);
-  
+
   //Logger.log("traderName = " + traderName);
   //Logger.log("settings.arrayTraderNames = " + settings.arrayTraderNames);
   //Logger.log("settings.arrayTraderNames.indexOf(traderName) = " + settings.arrayTraderNames.indexOf(traderName));
-  
+
   if (!sheetYearNumber) { sheetYearNumber = 9999; }
   if (!sheetMonthNumber && sheetMonthNumber != 0) { sheetMonthNumber = 99; }
   if (!traderNumber && traderNumber != 0) { traderNumber = 99; }
-  
+
   sheetYearNumber = parseInt(sheetYearNumber, 10);
   sheetMonthNumber = parseInt(sheetMonthNumber, 10);
   traderNumber = parseInt(traderNumber, 10);
-  
+
   var yearMonthTraderNum = sheetYearNumber * 10000 + sheetMonthNumber * 100 + traderNumber;
-  
+
   //Logger.log("yearMonthTraderNum = " + yearMonthTraderNum);
   //Logger.log("sheetMonthNumber = " + sheetMonthNumber);
   //Logger.log("sheetYearNumber = " + sheetYearNumber);
   //Logger.log("traderNumber = " + traderNumber);
 
-  return yearMonthTraderNum;   
+  return yearMonthTraderNum;
 }
 
 function convertSheetAndTraderNumberToName(sheetAndTraderNumber, settings) {
   Logger.log("**** Running convertSheetAndTraderNumberToName() ****");
-  Logger.log("sheetAndTraderNumber = " + sheetAndTraderNumber);
+  // Logger.log("sheetAndTraderNumber = " + sheetAndTraderNumber);
   var s = sheetAndTraderNumber.toString();
   var myYearString = s.substring(0,4);
   var myMonthString = s.substring(4,6);
   var myTraderString = s.substring(6);
-  
+
   if (myYearString == 9999 || myMonthString == 99 || myTraderString == 99) {
     return "Incorrect date format";
   } else {
@@ -594,3 +598,8 @@ function convertSheetAndTraderNumberToName(sheetAndTraderNumber, settings) {
     return (myMonth + " " + myYear + "-" + myTrader);
   }
 }
+
+/*
+- Change minute trigger to trigger once per week
+- regardless all data will be captured even if sheet is named "Augfffst 2017" -- if sheet name is misspelled it will show up at bottom of email with note explaining that it wasn't found in the db of permitted names
+*/
